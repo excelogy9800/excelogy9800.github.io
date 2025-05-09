@@ -84,19 +84,57 @@
       return counts[linkName];
     }
 
-    // Fetch IP address using ipapi.co
+    // Fetch IP address using WebRTC
     let userIp = 'Unknown';
-    fetch('https://ipapi.co/json/')
-      .then(response => response.json())
-      .then(data => {
-        userIp = data.ip || 'Unknown';
-        document.getElementById('ip').textContent = 'Your IP is: ' + userIp;
-        console.log('IP fetched:', userIp);
-      })
-      .catch(error => {
-        console.error('Error fetching IP:', error);
-        document.getElementById('ip').textContent = 'Your IP is: Unknown';
-      });
+    function getIpViaWebRTC(callback) {
+      const RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+      if (!RTCPeerConnection) {
+        console.error('WebRTC not supported');
+        callback('Unknown');
+        return;
+      }
+
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      pc.createDataChannel(''); // Create a dummy data channel
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .catch(error => {
+          console.error('WebRTC offer error:', error);
+          callback('Unknown');
+        });
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const candidate = event.candidate.candidate;
+          const ipMatch = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+          if (ipMatch) {
+            const ip = ipMatch[1];
+            if (ip !== '0.0.0.0' && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+              callback(ip); // Return public IP, not local
+              pc.close();
+              return;
+            }
+          }
+        }
+      };
+
+      // Fallback if no IP is found
+      setTimeout(() => {
+        if (pc.iceGatheringState !== 'complete') {
+          callback('Unknown');
+          pc.close();
+        }
+      }, 2000);
+    }
+
+    // Initialize IP display
+    getIpViaWebRTC((ip) => {
+      userIp = ip;
+      document.getElementById('ip').textContent = ip === 'Unknown' 
+        ? 'IP unavailable (WebRTC may be disabled)' 
+        : 'Your IP is: ' + ip;
+      console.log('IP fetched:', ip);
+    });
 
     // Track link click
     function trackLink(linkName, event) {
