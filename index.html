@@ -3,176 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>URL Tracker</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      background-color: #f0f0f0;
-      margin: 0;
-    }
-    h1 {
-      color: #333;
-    }
-    .link-container {
-      margin: 10px;
-      padding: 15px;
-      background-color: white;
-      border-radius: 5px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      width: 200px;
-      text-align: center;
-    }
-    a {
-      color: #0066cc;
-      text-decoration: none;
-      font-size: 18px;
-      cursor: pointer;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    #ip {
-      margin-top: 20px;
-      font-size: 14px;
-      color: #666;
-    }
-  </style>
+  <title>Click Tracker</title>
 </head>
 <body>
-  <h1>URL Tracking Demo</h1>
-  <div class="link-container">
-    <a onclick="trackLink('Link 1', event)">Click Link 1</a>
-  </div>
-  <div class="link-container">
-    <a onclick="trackLink('Link 2', event)">Click Link 2</a>
-  </div>
-  <div class="link-container">
-    <a onclick="trackLink('Link 3', event)">Click Link 3</a>
-  </div>
-  <p id="ip">Fetching IP...</p>
+  <h1>Tracked Links</h1>
+  <p>Click any link below to track your IP and send the info to a webhook before redirecting.</p>
+  
+  <!-- Add the class "track-click" to any link you want to track -->
+  <ul>
+    <li><a href="https://example.com" class="track-click">Go to Example.com</a></li>
+    <li><a href="https://openai.com" class="track-click">Go to OpenAI</a></li>
+  </ul>
 
   <script>
-    // Webhook URL (replace with your actual webhook URL, e.g., from webhook.site)
+    // TODO: Replace with your actual webhook URL
     const WEBHOOK_URL = 'https://n8n.excelogy.net/webhook/c3103877-3156-4c8c-8453-f0269a1d5330';
 
-    // Initialize click counts in localStorage if not present
-    function initializeCounts() {
-      const defaultCounts = {
-        'Link 1': 0,
-        'Link 2': 0,
-        'Link 3': 0
-      };
-      if (!localStorage.getItem('clickCounts')) {
-        localStorage.setItem('clickCounts', JSON.stringify(defaultCounts));
+    // Function to fetch the client IP using a public API
+    async function fetchClientIP() {
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        return data.ip;
+      } catch (err) {
+        console.error('Failed to fetch IP:', err);
+        return 'unknown';
       }
     }
 
-    // Get click counts from localStorage
-    function getClickCounts() {
-      return JSON.parse(localStorage.getItem('clickCounts')) || {};
-    }
+    // Handler for tracked clicks
+    async function handleTrackedClick(event) {
+      event.preventDefault();
+      const link = event.currentTarget;
+      const targetUrl = link.href;
 
-    // Update click count for a link
-    function updateClickCount(linkName) {
-      const counts = getClickCounts();
-      counts[linkName] = (counts[linkName] || 0) + 1;
-      localStorage.setItem('clickCounts', JSON.stringify(counts));
-      return counts[linkName];
-    }
-
-    // Fetch IP address using WebRTC
-    let userIp = 'Unknown';
-    function getIpViaWebRTC(callback) {
-      const RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-      if (!RTCPeerConnection) {
-        console.error('WebRTC not supported');
-        callback('Unknown');
-        return;
-      }
-
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      pc.createDataChannel(''); // Create a dummy data channel
-      pc.createOffer()
-        .then(offer => pc.setLocalDescription(offer))
-        .catch(error => {
-          console.error('WebRTC offer error:', error);
-          callback('Unknown');
-        });
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          const candidate = event.candidate.candidate;
-          const ipMatch = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
-          if (ipMatch) {
-            const ip = ipMatch[1];
-            if (ip !== '0.0.0.0' && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
-              callback(ip); // Return public IP, not local
-              pc.close();
-              return;
-            }
-          }
-        }
-      };
-
-      // Fallback if no IP is found
-      setTimeout(() => {
-        if (pc.iceGatheringState !== 'complete') {
-          callback('Unknown');
-          pc.close();
-        }
-      }, 2000);
-    }
-
-    // Initialize IP display
-    getIpViaWebRTC((ip) => {
-      userIp = ip;
-      document.getElementById('ip').textContent = ip === 'Unknown' 
-        ? 'IP unavailable (WebRTC may be disabled)' 
-        : 'Your IP is: ' + ip;
-      console.log('IP fetched:', ip);
-    });
-
-    // Track link click
-    function trackLink(linkName, event) {
-      event.preventDefault(); // Prevent default link behavior
-      console.log('Tracking link:', linkName);
-
-      // Update click count
-      const clickCount = updateClickCount(linkName);
-
-      // Prepare payload
+      const clientIP = await fetchClientIP();
       const payload = {
-        link: linkName,
-        ip: userIp,
-        clickCount: clickCount,
+        ip: clientIP,
+        url: targetUrl,
+        userAgent: navigator.userAgent,
         timestamp: new Date().toISOString()
       };
 
-      // Send to webhook
+      // Send tracking data to your webhook
       fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) throw new Error('Webhook failed: ' + response.status);
-          console.log('Webhook sent successfully');
-          alert('Click tracked for ' + linkName);
-        })
-        .catch(error => {
-          console.error('Error sending webhook:', error);
-          alert('Error tracking click: ' + error.message);
-        });
+      }).catch(err => console.error('Failed to send webhook:', err));
+
+      // Redirect the user after tracking
+      window.location.href = targetUrl;
     }
 
-    // Initialize click counts on page load
-    initializeCounts();
+    // Attach handlers on DOM load
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('a.track-click').forEach(link => {
+        link.addEventListener('click', handleTrackedClick);
+      });
+    });
   </script>
 </body>
 </html>
