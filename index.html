@@ -3,31 +3,105 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Click Tracker</title>
+  <title>YEAHHHH - URL Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e3c72, #2a5298); /* Faded blue neon */
+      color: white;
+    }
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 100px;
+      color: white;
+      margin: 0;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+    .link-container {
+      background: linear-gradient(135deg, rgba(255, 182, 193, 0.3), rgba(238, 130, 238, 0.3)); /* Faded pink/violet */
+      border-radius: 15px;
+      padding: 20px;
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    }
+    .track-click {
+      color: white;
+      text-decoration: none;
+      font-size: 24px;
+      margin: 10px 0;
+      padding: 10px 20px;
+      border-radius: 5px;
+      transition: background 0.3s;
+      text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+    .track-click:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #ip {
+      font-size: 14px;
+      color: white;
+      margin-top: 20px;
+      opacity: 0.8;
+    }
+  </style>
 </head>
 <body>
-  <h1>Tracked Links</h1>
-  <p>Click any link below to track your IP and send the info to a webhook before redirecting.</p>
-  
-  <!-- Add the class "track-click" to any link you want to track -->
-  <ul>
-    <li><a href="https://example.com" class="track-click">Go to Example.com</a></li>
-    <li><a href="https://openai.com" class="track-click">Go to OpenAI</a></li>
-  </ul>
+  <h1>YEAHHHH</h1>
+  <div class="link-container">
+    <a href="https://excelogy.net" class="track-click">Your Office Therapy</a>
+    <a href="https://youtube.com/@reallilexcel" class="track-click">Youtube</a>
+    <a href="https://tiktok.com/@lil.excel" class="track-click">Tiktok</a>
+  </div>
+  <p id="ip">Fetching IP...</p>
 
   <script>
-    // TODO: Replace with your actual webhook URL
+    // Webhook URL (replace with your actual webhook URL, e.g., from webhook.site)
     const WEBHOOK_URL = 'https://n8n.excelogy.net/webhook/c3103877-3156-4c8c-8453-f0269a1d5330';
 
-    // Function to fetch the client IP using a public API
+    // Initialize click counts in localStorage if not present
+    function initializeCounts() {
+      const defaultCounts = {
+        'Your Office Therapy': 0,
+        'Youtube': 0,
+        'Tiktok': 0
+      };
+      if (!localStorage.getItem('clickCounts')) {
+        localStorage.setItem('clickCounts', JSON.stringify(defaultCounts));
+      }
+    }
+
+    // Get click counts from localStorage
+    function getClickCounts() {
+      return JSON.parse(localStorage.getItem('clickCounts')) || {};
+    }
+
+    // Update click count for a link
+    function updateClickCount(linkName) {
+      const counts = getClickCounts();
+      counts[linkName] = (counts[linkName] || 0) + 1;
+      localStorage.setItem('clickCounts', JSON.stringify(counts));
+      return counts[linkName];
+    }
+
+    // Fetch the client IP using api.ipify.org
     async function fetchClientIP() {
       try {
         const res = await fetch('https://api.ipify.org?format=json');
         const data = await res.json();
-        return data.ip;
+        return data.ip || 'Unknown';
       } catch (err) {
         console.error('Failed to fetch IP:', err);
-        return 'unknown';
+        return 'Unknown';
       }
     }
 
@@ -36,32 +110,58 @@
       event.preventDefault();
       const link = event.currentTarget;
       const targetUrl = link.href;
+      const linkName = link.textContent;
 
+      // Fetch IP and update click count
       const clientIP = await fetchClientIP();
+      const clickCount = updateClickCount(linkName);
+
+      // Update IP display
+      document.getElementById('ip').textContent = 'Your IP is: ' + clientIP;
+
+      // Prepare payload
       const payload = {
         ip: clientIP,
         url: targetUrl,
+        linkName: linkName,
+        clickCount: clickCount,
         userAgent: navigator.userAgent,
         timestamp: new Date().toISOString()
       };
 
-      // Send tracking data to your webhook
+      // Send tracking data to webhook
       fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
-      }).catch(err => console.error('Failed to send webhook:', err));
-
-      // Redirect the user after tracking
-      window.location.href = targetUrl;
+      })
+        .then(response => {
+          if (!response.ok) throw new Error('Webhook failed: ' + response.status);
+          console.log('Webhook sent successfully');
+          // Redirect to target URL
+          window.location.href = targetUrl;
+        })
+        .catch(err => {
+          console.error('Failed to send webhook:', err);
+          alert('Error tracking click: ' + err.message);
+          // Redirect anyway
+          window.location.href = targetUrl;
+        });
     }
 
     // Attach handlers on DOM load
     document.addEventListener('DOMContentLoaded', () => {
+      initializeCounts();
       document.querySelectorAll('a.track-click').forEach(link => {
         link.addEventListener('click', handleTrackedClick);
+      });
+
+      // Fetch IP on page load
+      fetchClientIP().then(ip => {
+        document.getElementById('ip').textContent = 'Your IP is: ' + ip;
+        console.log('IP fetched:', ip);
       });
     });
   </script>
