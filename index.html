@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      background-color: #f0f0f0;
+      margin: 0;
+    }
+    h1 {
+      color: #333;
+    }
+    .link-container {
+      margin: 10px;
+      padding: 15px;
+      background-color: white;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      width: 200px;
+      text-align: center;
+    }
+    a {
+      color: #0066cc;
+      text-decoration: none;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    #ip {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>URL Tracking Demo</h1>
+  <div class="link-container">
+    <a onclick="trackLink('Link 1', event)">Click Link 1</a>
+  </div>
+  <div class="link-container">
+    <a onclick="trackLink('Link 2', event)">Click Link 2</a>
+  </div>
+  <div class="link-container">
+    <a onclick="trackLink('Link 3', event)">Click Link 3</a>
+  </div>
+  <p id="ip">Fetching IP...</p>
+
+  <script>
+    // Webhook URL (replace with your actual webhook URL, e.g., from webhook.site)
+    const WEBHOOK_URL = 'https://n8n.excelogy.net/webhook/c3103877-3156-4c8c-8453-f0269a1d5330';
+
+    // Initialize click counts in localStorage if not present
+    function initializeCounts() {
+      const defaultCounts = {
+        'Link 1': 0,
+        'Link 2': 0,
+        'Link 3': 0
+      };
+      if (!localStorage.getItem('clickCounts')) {
+        localStorage.setItem('clickCounts', JSON.stringify(defaultCounts));
+      }
+    }
+
+    // Get click counts from localStorage
+    function getClickCounts() {
+      return JSON.parse(localStorage.getItem('clickCounts')) || {};
+    }
+
+    // Update click count for a link
+    function updateClickCount(linkName) {
+      const counts = getClickCounts();
+      counts[linkName] = (counts[linkName] || 0) + 1;
+      localStorage.setItem('clickCounts', JSON.stringify(counts));
+      return counts[linkName];
+    }
+
+    // Fetch IP address using ipapi.co
+    let userIp = 'Unknown';
+    fetch('https://ipapi.co/json/')
+      .then(response => response.json())
+      .then(data => {
+        userIp = data.ip || 'Unknown';
+        document.getElementById('ip').textContent = 'Your IP is: ' + userIp;
+        console.log('IP fetched:', userIp);
+      })
+      .catch(error => {
+        console.error('Error fetching IP:', error);
+        document.getElementById('ip').textContent = 'Your IP is: Unknown';
+      });
+
+    // Track link click
+    function trackLink(linkName, event) {
+      event.preventDefault(); // Prevent default link behavior
+      console.log('Tracking link:', linkName);
+
+      // Update click count
+      const clickCount = updateClickCount(linkName);
+
+      // Prepare payload
+      const payload = {
+        link: linkName,
+        ip: userIp,
+        clickCount: clickCount,
+        timestamp: new Date().toISOString()
+      };
+
+      // Send to webhook
+      fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(response => {
+          if (!response.ok) throw new Error('Webhook failed: ' + response.status);
+          console.log('Webhook sent successfully');
+          alert('Click tracked for ' + linkName);
+        })
+        .catch(error => {
+          console.error('Error sending webhook:', error);
+          alert('Error tracking click: ' + error.message);
+        });
+    }
+
+    // Initialize click counts on page load
+    initializeCounts();
+  </script>
+</body>
+</html>
